@@ -444,20 +444,23 @@ class osm2pgrouting4qgis:
 
     def make_new_database(self, dbname, schema, host, port, user, password):
 
+        # Log into maintenance database and create the new DB
+        # TODO: parameterize maintenance DB (even though it will almost certainly be "postgres")
         conn_string = "dbname=postgres host={0} port={1} user={2} password={3}".format(host, port, user, password)
         with dbconnect(conn_string) as conn:
-            conn.autocommit = True
+            conn.autocommit = True  # connection MUST be in autocommit mode to create databases!
             cur = conn.cursor()
-
-            query = sql.SQL("""
-    
-                        CREATE DATABASE {};
-    
-            """).format(sql.Identifier(dbname))
-            cur.execute(query)
-
+            cur.execute(sql.SQL("CREATE DATABASE {};").format(sql.Identifier(dbname)))
             conn.commit()
             cur.close()
+
+        if schema:
+            conn_string = "dbname={0} host={1} port={2} user={3} password={4}".format(dbname, host, port, user, password)
+            with dbconnect(conn_string) as conn:
+                cur = conn.cursor()
+                cur.execute(sql.SQL("CREATE SCHEMA {};").format(sql.Identifier(schema)))
+                conn.commit()
+                cur.close()
 
         # Add the connection to QGIS
         settings = QSettings()
@@ -516,10 +519,11 @@ class osm2pgrouting4qgis:
                     "password": self.dlg.new_db_password_lineEdit.text(),
                     "save_username": "true",  # TODO: parameterize save_username
                     "save_password": "true",  # TODO: parameterize save_password
+                    "schema": "newschema",
                 }
                 # self.set_optional_params()
 
-                self.make_new_database(self.db_credentials["dbname"], "public",  # TODO: parameterize schema
+                self.make_new_database(self.db_credentials["dbname"], self.db_credentials["schema"],
                                    self.db_credentials["host"],
                                    self.db_credentials["port"], self.db_credentials["user"],
                                    self.db_credentials["password"])
