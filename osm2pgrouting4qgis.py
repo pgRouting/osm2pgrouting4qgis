@@ -24,13 +24,16 @@
 from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction, QListWidgetItem, QFileDialog
-from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsPointXY, QgsMapSettings, QgsProject
+from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsPointXY, QgsMapSettings, QgsProject, \
+    QgsDataSourceUri
 
 # Initialize Qt resources from file resources.py
 # from .resources import *
 # Import the code for the dialog
 from .osm2pgrouting4qgis_dialog import osm2pgrouting4qgisDialog
 import os.path
+
+from psycopg2 import connect as dbconnect, sql
 
 
 class osm2pgrouting4qgis:
@@ -439,6 +442,53 @@ class osm2pgrouting4qgis:
 
         return None
 
+    def make_new_database(self, dbname, schema, host, port, user, password):
+
+        conn_string = "dbname=postgres host={0} port={1} user={2} password={3}".format(host, port, user, password)
+        with dbconnect(conn_string) as conn:
+            conn.autocommit = True
+            cur = conn.cursor()
+
+            query = sql.SQL("""
+    
+                        CREATE DATABASE {};
+    
+            """).format(sql.Identifier(dbname))
+            cur.execute(query)
+
+            conn.commit()
+            cur.close()
+
+        # Add the connection to QGIS
+        settings = QSettings()
+        settings.setValue("PostgreSQL/connections/{0}/allowGeometrylessTables".format(self.db_credentials["name"]),
+                          "false")
+        settings.setValue("PostgreSQL/connections/{0}/authcfg".format(self.db_credentials["name"]), "")
+        settings.setValue("PostgreSQL/connections/{0}/database".format(self.db_credentials["name"]),
+                          self.db_credentials["dbname"])
+        settings.setValue("PostgreSQL/connections/{0}/dontResolveType".format(self.db_credentials["name"]), "false")
+        settings.setValue("PostgreSQL/connections/{0}/estimatedMetadata".format(self.db_credentials["name"]), "false")
+        settings.setValue("PostgreSQL/connections/{0}/geometryColumnsOnly".format(self.db_credentials["name"]), "false")
+        settings.setValue("PostgreSQL/connections/{0}/host".format(self.db_credentials["name"]),
+                          self.db_credentials["host"])
+        settings.setValue("PostgreSQL/connections/{0}/password".format(self.db_credentials["name"]),
+                          self.db_credentials["password"])
+        settings.setValue("PostgreSQL/connections/{0}/port".format(self.db_credentials["name"]),
+                          self.db_credentials["port"])
+        settings.setValue("PostgreSQL/connections/{0}/publicOnly".format(self.db_credentials["name"]), "false")
+        settings.setValue("PostgreSQL/connections/{0}/savePassword".format(self.db_credentials["name"]),
+                          self.db_credentials["save_password"])
+        settings.setValue("PostgreSQL/connections/{0}/saveUsername".format(self.db_credentials["name"]),
+                          self.db_credentials["save_username"])
+        settings.setValue("PostgreSQL/connections/{0}/service".format(self.db_credentials["name"]),
+                          self.db_credentials["service"])
+        settings.setValue("PostgreSQL/connections/{0}/sslmode".format(self.db_credentials["name"]), "1")
+        settings.setValue("PostgreSQL/connections/{0}/username".format(self.db_credentials["name"]),
+                          self.db_credentials["user"])
+        QCoreApplication.processEvents()  # refresh browser panel
+
+        return None
+
     def run(self):
         """Run method that performs all the real work"""
         # show the dialog
@@ -447,4 +497,29 @@ class osm2pgrouting4qgis:
         result = self.dlg.exec_()
         # See if OK was pressed
         if result:
-            pass
+
+            # Get credentials if a pre-existing connection from QGIS was selected
+            if self.dlg.existing_db_radioButton.isChecked():
+                db_name = self.dlg.db_listWidget.currentItem().text()
+                self.db_credentials = self.get_db_credentials(db_name)
+                # self.set_optional_params()
+
+            # Define credentials from dialog and create database if new connection was selected
+            elif self.dlg.new_db_radioButton.isChecked():
+                self.db_credentials = {
+                    "name": self.dlg.new_db_name_lineEdit.text(),
+                    "service": self.dlg.new_db_service_lineEdit.text(),
+                    "host": self.dlg.new_db_host_lineEdit.text(),
+                    "port": self.dlg.new_db_port_lineEdit.text(),
+                    "dbname": self.dlg.new_db_database_lineEdit.text(),
+                    "user": self.dlg.new_db_username_lineEdit.text(),
+                    "password": self.dlg.new_db_password_lineEdit.text(),
+                    "save_username": "true",  # TODO: parameterize save_username
+                    "save_password": "true",  # TODO: parameterize save_password
+                }
+                # self.set_optional_params()
+
+                self.make_new_database(self.db_credentials["dbname"], "public",  # TODO: parameterize schema
+                                   self.db_credentials["host"],
+                                   self.db_credentials["port"], self.db_credentials["user"],
+                                   self.db_credentials["password"])
