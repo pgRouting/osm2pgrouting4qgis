@@ -24,6 +24,7 @@
 from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction, QListWidgetItem, QFileDialog
+from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsPointXY, QgsMapSettings, QgsProject
 
 # Initialize Qt resources from file resources.py
 # from .resources import *
@@ -202,6 +203,9 @@ class osm2pgrouting4qgis:
 
         # Set up file chooser
         self.dlg.local_file_pushButton.clicked.connect(self.open_file_chooser)
+
+        # Make "Current Extent" button generate the current extent in their respective lineEdits
+        self.dlg.extent_pushButton.clicked.connect(self.use_current_extent)
 
         # Set up initial GUI state
         self.set_initial_state()
@@ -401,6 +405,37 @@ class osm2pgrouting4qgis:
         filename = QFileDialog.getOpenFileName(self.dlg, "Select .osm file", "", "*.osm")[0]
         if filename:
             self.dlg.local_file_lineEdit.setText(filename)
+
+        return None
+
+    def use_current_extent(self):
+
+        # Get current CRS and set up a CRS transformer for the current CRS and WGS84 (EPSG: 4326)
+        canvas = self.iface.mapCanvas()
+        # current_crs = canvas.mapRenderer().destinationCrs().authid()
+        current_crs = canvas.mapSettings().destinationCrs()
+        source_crs = QgsCoordinateReferenceSystem(current_crs)
+        target_crs = QgsCoordinateReferenceSystem(4326)
+        transformer = QgsCoordinateTransform(source_crs, target_crs, QgsProject.instance())
+
+        # Get current extent and transform to WGS84
+        extent = self.iface.mapCanvas().extent()
+        bottom_left_point = QgsPointXY(extent.xMinimum(), extent.yMinimum())
+        top_right_point = QgsPointXY(extent.xMaximum(), extent.yMaximum())
+        bottom_left_point_transformed = transformer.transform(bottom_left_point)
+        top_right_point_transformed = transformer.transform(top_right_point)
+
+        # Extract extent boundaries
+        top = top_right_point_transformed.y()
+        left = bottom_left_point_transformed.x()
+        right = top_right_point_transformed.x()
+        bottom = bottom_left_point_transformed.y()
+
+        # Populate extent lineEdits
+        self.dlg.bounding_box_top_lineEdit.setText(str(top))
+        self.dlg.bounding_box_left_lineEdit.setText(str(left))
+        self.dlg.bounding_box_right_lineEdit.setText(str(right))
+        self.dlg.bounding_box_bottom_lineEdit.setText(str(bottom))
 
         return None
 
