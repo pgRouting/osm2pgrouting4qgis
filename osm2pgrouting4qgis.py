@@ -23,7 +23,7 @@
 """
 from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QAction, QListWidgetItem
+from PyQt5.QtWidgets import QAction, QListWidgetItem, QFileDialog
 
 # Initialize Qt resources from file resources.py
 # from .resources import *
@@ -199,6 +199,9 @@ class osm2pgrouting4qgis:
         self._alt_osm2pgr_exec_toggle = False
         self.dlg.alt_osm2pgr_exec_checkBox.setChecked(False)
         self.dlg.alt_osm2pgr_exec_checkBox.clicked.connect(self.toggle_alt_osm2pgr_exec)
+
+        # Set up file chooser
+        self.dlg.local_file_pushButton.clicked.connect(self.open_file_chooser)
 
         # Set up initial GUI state
         self.set_initial_state()
@@ -390,6 +393,14 @@ class osm2pgrouting4qgis:
             self.dlg.alt_osm2pgr_exec_lineEdit.setDisabled(False)
 
         self._alt_osm2pgr_exec_toggle = not self._alt_osm2pgr_exec_toggle
+
+        return None
+
+    def open_file_chooser(self):
+
+        filename = QFileDialog.getOpenFileName(self.dlg, "Select .osm file", "", "*.osm")[0]
+        if filename:
+            self.dlg.local_file_lineEdit.setText(filename)
 
         return None
 
