@@ -442,7 +442,7 @@
      </rect>
     </property>
     <property name="text">
-     <string/>
+     <string>new_db</string>
     </property>
    </widget>
    <widget class="QLineEdit" name="new_db_username_lineEdit">
@@ -455,7 +455,7 @@
      </rect>
     </property>
     <property name="text">
-     <string/>
+     <string>postgres</string>
     </property>
    </widget>
    <widget class="QLabel" name="new_db_username_label">
@@ -494,7 +494,7 @@
      </rect>
     </property>
     <property name="text">
-     <string/>
+     <string>new_db_conn</string>
     </property>
    </widget>
    <widget class="QLabel" name="new_db_port_label">
@@ -546,7 +546,7 @@
      </rect>
     </property>
     <property name="text">
-     <string/>
+     <string>5432</string>
     </property>
    </widget>
    <widget class="QLabel" name="new_db_service_label">
@@ -585,7 +585,7 @@
      </rect>
     </property>
     <property name="text">
-     <string/>
+     <string>localhost</string>
     </property>
    </widget>
    <widget class="QLineEdit" name="new_db_password_lineEdit">
@@ -598,7 +598,7 @@
      </rect>
     </property>
     <property name="text">
-     <string/>
+     <string>postgres</string>
     </property>
     <property name="echoMode">
      <enum>QLineEdit::Password</enum>

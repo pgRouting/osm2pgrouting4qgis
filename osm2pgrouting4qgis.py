@@ -23,13 +23,20 @@
 """
 from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QAction, QListWidgetItem
+from PyQt5.QtWidgets import QAction, QListWidgetItem, QFileDialog
+from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsPointXY, QgsMapSettings, QgsProject, \
+    QgsDataSourceUri, QgsApplication
 
 # Initialize Qt resources from file resources.py
 # from .resources import *
 # Import the code for the dialog
 from .osm2pgrouting4qgis_dialog import osm2pgrouting4qgisDialog
 import os.path
+
+from psycopg2 import connect as dbconnect, sql
+import requests
+import subprocess
+import sys
 
 
 class osm2pgrouting4qgis:
@@ -200,8 +207,18 @@ class osm2pgrouting4qgis:
         self.dlg.alt_osm2pgr_exec_checkBox.setChecked(False)
         self.dlg.alt_osm2pgr_exec_checkBox.clicked.connect(self.toggle_alt_osm2pgr_exec)
 
+        # Set up file chooser
+        self.dlg.local_file_pushButton.clicked.connect(self.open_file_chooser)
+
+        # Make "Current Extent" button generate the current extent in their respective lineEdits
+        self.dlg.extent_pushButton.clicked.connect(self.use_current_extent)
+
         # Set up initial GUI state
         self.set_initial_state()
+
+        # cd to the plugin home folder
+        os.chdir(os.path.join(QgsApplication.qgisSettingsDirPath(), r"python/plugins/osm2pgrouting4qgis"))
+
 
 
     def set_initial_state(self):
@@ -393,6 +410,127 @@ class osm2pgrouting4qgis:
 
         return None
 
+    def open_file_chooser(self):
+
+        filename = QFileDialog.getOpenFileName(self.dlg, "Select .osm file", "", "*.osm")[0]
+        if filename:
+            self.dlg.local_file_lineEdit.setText(filename)
+
+        return None
+
+    def use_current_extent(self):
+
+        # Get current CRS and set up a CRS transformer for the current CRS and WGS84 (EPSG: 4326)
+        canvas = self.iface.mapCanvas()
+        # current_crs = canvas.mapRenderer().destinationCrs().authid()
+        current_crs = canvas.mapSettings().destinationCrs()
+        source_crs = QgsCoordinateReferenceSystem(current_crs)
+        target_crs = QgsCoordinateReferenceSystem(4326)
+        transformer = QgsCoordinateTransform(source_crs, target_crs, QgsProject.instance())
+
+        # Get current extent and transform to WGS84
+        extent = self.iface.mapCanvas().extent()
+        bottom_left_point = QgsPointXY(extent.xMinimum(), extent.yMinimum())
+        top_right_point = QgsPointXY(extent.xMaximum(), extent.yMaximum())
+        bottom_left_point_transformed = transformer.transform(bottom_left_point)
+        top_right_point_transformed = transformer.transform(top_right_point)
+
+        # Extract extent boundaries
+        top = top_right_point_transformed.y()
+        left = bottom_left_point_transformed.x()
+        right = top_right_point_transformed.x()
+        bottom = bottom_left_point_transformed.y()
+
+        # Populate extent lineEdits
+        self.dlg.bounding_box_top_lineEdit.setText(str(top))
+        self.dlg.bounding_box_left_lineEdit.setText(str(left))
+        self.dlg.bounding_box_right_lineEdit.setText(str(right))
+        self.dlg.bounding_box_bottom_lineEdit.setText(str(bottom))
+
+        return None
+
+    def make_new_database(self, dbname, host, port, user, password, schema="public"):
+
+        # Log into maintenance database and create the new DB
+        # TODO: parameterize maintenance DB (even though it will almost certainly be "postgres")
+        conn_string = "dbname=postgres host={0} port={1} user={2} password={3}".format(host, port, user, password)
+        with dbconnect(conn_string) as conn:
+            conn.autocommit = True  # connection MUST be in autocommit mode to create databases!
+            cur = conn.cursor()
+            cur.execute(sql.SQL("CREATE DATABASE {};").format(sql.Identifier(dbname)))
+            conn.commit()
+            cur.close()
+
+        if schema != "public":
+            conn_string = "dbname={0} host={1} port={2} user={3} password={4}".format(dbname, host, port, user, password)
+            with dbconnect(conn_string) as conn:
+                cur = conn.cursor()
+                cur.execute(sql.SQL("CREATE SCHEMA {};").format(sql.Identifier(schema)))
+                conn.commit()
+                cur.close()
+
+        # Add the connection to QGIS
+        settings = QSettings()
+        settings.setValue("PostgreSQL/connections/{0}/allowGeometrylessTables".format(self.db_credentials["name"]),
+                          "false")
+        settings.setValue("PostgreSQL/connections/{0}/authcfg".format(self.db_credentials["name"]), "")
+        settings.setValue("PostgreSQL/connections/{0}/database".format(self.db_credentials["name"]),
+                          self.db_credentials["dbname"])
+        settings.setValue("PostgreSQL/connections/{0}/dontResolveType".format(self.db_credentials["name"]), "false")
+        settings.setValue("PostgreSQL/connections/{0}/estimatedMetadata".format(self.db_credentials["name"]), "false")
+        settings.setValue("PostgreSQL/connections/{0}/geometryColumnsOnly".format(self.db_credentials["name"]), "false")
+        settings.setValue("PostgreSQL/connections/{0}/host".format(self.db_credentials["name"]),
+                          self.db_credentials["host"])
+        settings.setValue("PostgreSQL/connections/{0}/password".format(self.db_credentials["name"]),
+                          self.db_credentials["password"])
+        settings.setValue("PostgreSQL/connections/{0}/port".format(self.db_credentials["name"]),
+                          self.db_credentials["port"])
+        settings.setValue("PostgreSQL/connections/{0}/publicOnly".format(self.db_credentials["name"]), "false")
+        settings.setValue("PostgreSQL/connections/{0}/savePassword".format(self.db_credentials["name"]),
+                          self.db_credentials["save_password"])
+        settings.setValue("PostgreSQL/connections/{0}/saveUsername".format(self.db_credentials["name"]),
+                          self.db_credentials["save_username"])
+        settings.setValue("PostgreSQL/connections/{0}/service".format(self.db_credentials["name"]),
+                          self.db_credentials["service"])
+        settings.setValue("PostgreSQL/connections/{0}/sslmode".format(self.db_credentials["name"]), "1")
+        settings.setValue("PostgreSQL/connections/{0}/username".format(self.db_credentials["name"]),
+                          self.db_credentials["user"])
+        QCoreApplication.processEvents()  # refresh browser panel
+
+        return None
+
+    def download_osm_data(self, rest_url, bbox):
+
+        print((r"https://api.openstreetmap.org/api/0.6/map?bbox={},{},{},{}"
+                           .format(bbox[0], bbox[1], bbox[2], bbox[3])))
+
+        req = requests.get(r"{}?bbox={},{},{},{}"
+                           .format(rest_url, bbox[0], bbox[1], bbox[2], bbox[3]))
+        with open(os.path.join(os.getcwd(), r"osm/data.osm"), "w") as osm_file:
+            osm_file.write(req.text)
+            osm_file_path = osm_file.name
+
+        return osm_file_path
+
+    def get_db_credentials(self, db_name):
+
+        db_credentials = {
+            "dbname": db_name
+        }
+        qs = QSettings()
+        k_list = [k for k in sorted(qs.allKeys()) if k[:10] == "PostgreSQL" and k.split("/")[2] == db_name]
+        for k in k_list:
+            if k.split("/")[-1] == "host":
+                db_credentials["host"] = qs.value(k)
+            elif k.split("/")[-1] == "port":
+                db_credentials["port"] = qs.value(k)
+            elif k.split("/")[-1] == "username":
+                db_credentials["user"] = qs.value(k)
+            elif k.split("/")[-1] == "password":
+                db_credentials["password"] = qs.value(k)
+
+        return db_credentials
+
     def run(self):
         """Run method that performs all the real work"""
         # show the dialog
@@ -401,4 +539,86 @@ class osm2pgrouting4qgis:
         result = self.dlg.exec_()
         # See if OK was pressed
         if result:
-            pass
+
+            # Get credentials if a pre-existing connection from QGIS was selected
+            if self.dlg.existing_db_radioButton.isChecked():
+                db_name = self.dlg.db_listWidget.currentItem().text()
+                self.db_credentials = self.get_db_credentials(db_name)
+
+            # Define credentials from dialog and create database if new connection was selected
+            elif self.dlg.new_db_radioButton.isChecked():
+                self.db_credentials = {
+                    "name": self.dlg.new_db_name_lineEdit.text(),
+                    "service": self.dlg.new_db_service_lineEdit.text(),
+                    "host": self.dlg.new_db_host_lineEdit.text(),
+                    "port": self.dlg.new_db_port_lineEdit.text(),
+                    "dbname": self.dlg.new_db_database_lineEdit.text(),
+                    "user": self.dlg.new_db_username_lineEdit.text(),
+                    "password": self.dlg.new_db_password_lineEdit.text(),
+                    "save_username": "true" if self.dlg.new_db_save_username_checkBox.isChecked() else False,
+                    "save_password": "true" if self.dlg.new_db_save_password_checkBox.isChecked() else False,
+                    "schema": self.dlg.schema_LineEdit if self.dlg.schema_checkBox.isChecked() else "public",
+                }
+
+                self.make_new_database(self.db_credentials["dbname"], self.db_credentials["host"],
+                                       self.db_credentials["port"], self.db_credentials["user"],
+                                       self.db_credentials["password"], self.db_credentials["schema"])
+
+            if self.dlg.local_file_radioButton.isChecked():
+                osm_bbox = [float(self.dlg.bounding_box_left_lineEdit.text()),
+                            float(self.dlg.bounding_box_bottom_lineEdit.text()),
+                            float(self.dlg.bounding_box_right_lineEdit.text()),
+                            float(self.dlg.bounding_box_top_lineEdit.text())]
+                osm_file = self.download_osm_data(osm_bbox)
+            elif self.dlg.osm_download_radioButton.ischecked():
+                osm_file = self.dlg.local_file_LineEdit.text()
+
+            # Set map config
+            if self.dlg.mapconfig_std_radioButton.isChecked():
+                map_config = os.path.join(os.getcwd(), r"map_configs/mapconfig.xml")
+            elif self.dlg.mapconfig_cars_radioButton.isChecked():
+                map_config = os.path.join(os.getcwd(), r"map_configs/mapconfig_for_cars.xml")
+            elif self.dlg.mapconfig_bicycles_radioButton.isChecked():
+                map_config = os.path.join(os.getcwd(), r"map_configs/mapconfig_for_bicycles.xml")
+
+            # Set up other osm2pgrouting parameters
+            if self.dlg.schema_checkBox.isChecked():
+                schema = self.dlg.schema_lineEdit.text()
+            else:
+                schema = "public"
+
+            # Set custom executable if applicable
+            if self.dlg.alt_osm2pgr_exec_checkBox.isChecked() and self.dlg.alt_osm2pgr_exec_lineEdit.text() is not None:
+                osm2pgr_exec = self.dlg.alt_osm2pgr_exec_lineEdit.text()
+            else:
+                osm2pgr_exec = "osm2pgrouting"
+
+            osm2pgrouting_parameters = [
+                osm2pgr_exec,
+                "--file", osm_file,
+                "--conf", map_config,
+                "--schema", schema,
+                "--dbname", self.db_credentials["dbname"],
+                "--host", self.db_credentials["host"],
+                "--username", self.db_credentials["user"],
+                "--password", self.db_credentials["password"],
+            ]
+            if self.dlg.overwrite_checkBox.isChecked():
+                osm2pgrouting_parameters.append("--clean")
+            if self.dlg.nodes_checkBox.isChecked():
+                osm2pgrouting_parameters.append("--addnodes")
+            if self.dlg.prefix_checkBox.isChecked():
+                osm2pgrouting_parameters.extend(["--prefix", self.dlg.prefix_lineEdit.text().lower()])
+            if self.dlg.prefix_checkBox.isChecked():
+                osm2pgrouting_parameters.extend(["--suffix", self.dlg.suffix_lineEdit.text().lower()])
+
+            print("executing: {}".format(" ".join(osm2pgrouting_parameters)))
+
+            osm2pgrouting_process = subprocess.Popen(osm2pgrouting_parameters, stdout=subprocess.PIPE)
+            for line in iter(osm2pgrouting_process.stdout.readline, ''):
+                if str(line) != "b''":
+                    sys.stdout.write(str(line))
+                else:
+                    break
+
+            os.remove(osm_file)
