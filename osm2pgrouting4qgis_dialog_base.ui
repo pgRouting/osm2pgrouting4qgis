@@ -29,7 +29,7 @@
     <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
    </property>
   </widget>
-  <widget class="QGroupBox" name="mapconfig_groupBox">
+  <widget class="QGroupBox" name="osm2pgr_config_groupBox">
    <property name="geometry">
     <rect>
      <x>20</x>
@@ -173,6 +173,29 @@
     </property>
     <property name="text">
      <string>Standard map configuration</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="alt_osm2pgr_exec_lineEdit">
+    <property name="geometry">
+     <rect>
+      <x>420</x>
+      <y>150</y>
+      <width>251</width>
+      <height>25</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="alt_osm2pgr_exec_checkBox">
+    <property name="geometry">
+     <rect>
+      <x>400</x>
+      <y>130</y>
+      <width>231</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Alternate osm2pgrouting executable:</string>
     </property>
    </widget>
   </widget>
@@ -653,7 +676,7 @@
   <zorder>groupBox_2</zorder>
   <zorder>groupBox</zorder>
   <zorder>button_box</zorder>
-  <zorder>mapconfig_groupBox</zorder>
+  <zorder>osm2pgr_config_groupBox</zorder>
   <zorder>line_2</zorder>
   <zorder>line_3</zorder>
  </widget>

@@ -195,6 +195,11 @@ class osm2pgrouting4qgis:
         self.dlg.suffix_checkBox.setChecked(False)
         self.dlg.suffix_checkBox.clicked.connect(self.toggle_suffix)
 
+        # Toggle alternative osm2pgr executable
+        self._alt_osm2pgr_exec_toggle = False
+        self.dlg.alt_osm2pgr_exec_checkBox.setChecked(False)
+        self.dlg.alt_osm2pgr_exec_checkBox.clicked.connect(self.toggle_alt_osm2pgr_exec)
+
         # Set up initial GUI state
         self.set_initial_state()
 
@@ -216,17 +221,6 @@ class osm2pgrouting4qgis:
         self.dlg.rest_endpoint_lineEdit.setDisabled(True)
         self.dlg.rest_endpoint_test_pushButton.setDisabled(True)
 
-        # Schema
-        self.dlg.schema_lineEdit.setDisabled(True)
-
-        # Prefix
-        self.dlg.prefix_checkBox.setChecked(False)
-        self.dlg.prefix_lineEdit.setDisabled(True)
-
-        # Suffix
-        self.dlg.suffix_checkBox.setChecked(False)
-        self.dlg.suffix_lineEdit.setDisabled(True)
-
         # Database
         self.dlg.overwrite_checkBox.setDisabled(False)
         self.dlg.db_listWidget.setDisabled(False)
@@ -246,6 +240,19 @@ class osm2pgrouting4qgis:
         self.dlg.new_db_password_lineEdit.setDisabled(True)
         self.dlg.new_db_save_username_checkBox.setDisabled(True)
         self.dlg.new_db_save_password_checkBox.setDisabled(True)
+
+        # Schema
+        self.dlg.schema_lineEdit.setDisabled(True)
+
+        # Prefix
+        self.dlg.prefix_checkBox.setChecked(False)
+        self.dlg.prefix_lineEdit.setDisabled(True)
+
+        # Suffix
+        self.dlg.suffix_checkBox.setChecked(False)
+        self.dlg.suffix_lineEdit.setDisabled(True)
+
+        self.dlg.alt_osm2pgr_exec_lineEdit.setDisabled(True)
 
         # Database connections
         qs = QSettings()
@@ -372,6 +379,17 @@ class osm2pgrouting4qgis:
             self.dlg.suffix_lineEdit.setDisabled(False)
 
         self._suffix_toggle = not self._suffix_toggle
+
+        return None
+
+    def toggle_alt_osm2pgr_exec(self):
+
+        if self._alt_osm2pgr_exec_toggle:
+            self.dlg.alt_osm2pgr_exec_lineEdit.setDisabled(True)
+        else:
+            self.dlg.alt_osm2pgr_exec_lineEdit.setDisabled(False)
+
+        self._alt_osm2pgr_exec_toggle = not self._alt_osm2pgr_exec_toggle
 
         return None
 
