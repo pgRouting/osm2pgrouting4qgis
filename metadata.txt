@@ -1,0 +1,39 @@
+# This file contains metadata for your plugin. Since 
+# version 2.0 of QGIS this is the proper way to supply 
+# information about a plugin. The old method of 
+# embedding metadata in __init__.py will 
+# is no longer supported since version 2.0.
+
+# This file should be included when you package your plugin.# Mandatory items:
+
+[general]
+name=osm2pgrouting4qgis
+qgisMinimumVersion=3.0
+description=Automatically builds a pgRouting-compatible layer in a PostGIS database
+version=0.1
+author=Isaac Boates
+email=iboates@gmail.com
+
+about=TODO: make an About blurb
+
+tracker=https://github.com/iboates/Make-OSM-Routable-Network/issues
+repository=https://github.com/iboates/Make-OSM-Routable-Network.git
+# End of mandatory metadata
+
+# Recommended items:
+
+# Uncomment the following line and add your changelog:
+# changelog=
+
+# Tags are comma separated with spaces allowed
+tags=python, pgrouting, osm, osm2pgrouting, routing, network
+
+homepage=https://github.com/iboates/Make-OSM-Routable-Network
+category=Database
+icon=icon.png
+# experimental flag
+experimental=True
+
+# deprecated flag (applies to the whole plugin, not just a single version)
+deprecated=False
+
