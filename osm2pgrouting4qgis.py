@@ -202,6 +202,11 @@ class osm2pgrouting4qgis:
         self.dlg.suffix_checkBox.setChecked(False)
         self.dlg.suffix_checkBox.clicked.connect(self.toggle_suffix)
 
+        # Toggle add attributes / add nodes
+        self._attributes_and_tags_toggle = False
+        self.dlg.nodes_checkBox.setChecked(False)
+        self.dlg.nodes_checkBox.clicked.connect(self.toggle_attributes_and_tags)
+
         # Toggle alternative osm2pgr executable
         self._alt_osm2pgr_exec_toggle = False
         self.dlg.alt_osm2pgr_exec_checkBox.setChecked(False)
@@ -218,7 +223,6 @@ class osm2pgrouting4qgis:
 
         # cd to the plugin home folder
         os.chdir(os.path.join(QgsApplication.qgisSettingsDirPath(), r"python/plugins/osm2pgrouting4qgis"))
-
 
 
     def set_initial_state(self):
@@ -269,6 +273,14 @@ class osm2pgrouting4qgis:
         self.dlg.suffix_checkBox.setChecked(False)
         self.dlg.suffix_lineEdit.setDisabled(True)
 
+        # Add attributes / add nodes
+        self.dlg.add_attributes_checkBox.setDisabled(True)
+        self.dlg.add_tags_checkBox.setDisabled(True)
+        self.dlg.addnodes_tree_decoration1.setDisabled(True)
+        self.dlg.addnodes_tree_decoration2.setDisabled(True)
+        self.dlg.addnodes_tree_decoration3.setDisabled(True)
+
+        # Alternate osm2pgr exec
         self.dlg.alt_osm2pgr_exec_lineEdit.setDisabled(True)
 
         # Database connections
@@ -399,6 +411,27 @@ class osm2pgrouting4qgis:
 
         return None
 
+    def toggle_attributes_and_tags(self):
+
+        if self._attributes_and_tags_toggle:
+            self.dlg.add_attributes_checkBox.setDisabled(True)
+            self.dlg.add_tags_checkBox.setDisabled(True)
+            self.dlg.add_attributes_checkBox.setChecked(False)
+            self.dlg.add_tags_checkBox.setChecked(False)
+            self.dlg.addnodes_tree_decoration1.setDisabled(True)
+            self.dlg.addnodes_tree_decoration2.setDisabled(True)
+            self.dlg.addnodes_tree_decoration3.setDisabled(True)
+        else:
+            self.dlg.add_attributes_checkBox.setDisabled(False)
+            self.dlg.add_tags_checkBox.setDisabled(False)
+            self.dlg.addnodes_tree_decoration1.setDisabled(False)
+            self.dlg.addnodes_tree_decoration2.setDisabled(False)
+            self.dlg.addnodes_tree_decoration3.setDisabled(False)
+
+        self._attributes_and_tags_toggle = not self._attributes_and_tags_toggle
+
+        return None
+
     def toggle_alt_osm2pgr_exec(self):
 
         if self._alt_osm2pgr_exec_toggle:
@@ -461,13 +494,13 @@ class osm2pgrouting4qgis:
             conn.commit()
             cur.close()
 
-        if schema != "public":
-            conn_string = "dbname={0} host={1} port={2} user={3} password={4}".format(dbname, host, port, user, password)
-            with dbconnect(conn_string) as conn:
-                cur = conn.cursor()
-                cur.execute(sql.SQL("CREATE SCHEMA {};").format(sql.Identifier(schema)))
-                conn.commit()
-                cur.close()
+        # if schema != "public":
+        #     conn_string = "dbname={0} host={1} port={2} user={3} password={4}".format(dbname, host, port, user, password)
+        #     with dbconnect(conn_string) as conn:
+        #         cur = conn.cursor()
+        #         cur.execute(sql.SQL("CREATE SCHEMA {};").format(sql.Identifier(schema)))
+        #         conn.commit()
+        #         cur.close()
 
         # Add the connection to QGIS
         settings = QSettings()
@@ -499,10 +532,18 @@ class osm2pgrouting4qgis:
 
         return None
 
-    def download_osm_data(self, rest_url, bbox):
+    def make_db_schema(self, dbname, host, port, user, password, schema):
 
-        print((r"https://api.openstreetmap.org/api/0.6/map?bbox={},{},{},{}"
-                           .format(bbox[0], bbox[1], bbox[2], bbox[3])))
+        conn_string = "dbname={0} host={1} port={2} user={3} password={4}".format(dbname, host, port, user, password)
+        with dbconnect(conn_string) as conn:
+            cur = conn.cursor()
+            cur.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {};").format(sql.Identifier(schema)))
+            conn.commit()
+            cur.close()
+
+        return None
+
+    def download_osm_data(self, rest_url, bbox):
 
         req = requests.get(r"{}?bbox={},{},{},{}"
                            .format(rest_url, bbox[0], bbox[1], bbox[2], bbox[3]))
@@ -514,13 +555,13 @@ class osm2pgrouting4qgis:
 
     def get_db_credentials(self, db_name):
 
-        db_credentials = {
-            "dbname": db_name
-        }
+        db_credentials = {}
         qs = QSettings()
         k_list = [k for k in sorted(qs.allKeys()) if k[:10] == "PostgreSQL" and k.split("/")[2] == db_name]
         for k in k_list:
-            if k.split("/")[-1] == "host":
+            if k.split("/")[-1] == "database":
+                db_credentials["dbname"] = qs.value(k)
+            elif k.split("/")[-1] == "host":
                 db_credentials["host"] = qs.value(k)
             elif k.split("/")[-1] == "port":
                 db_credentials["port"] = qs.value(k)
@@ -540,6 +581,18 @@ class osm2pgrouting4qgis:
         # See if OK was pressed
         if result:
 
+            # Get osm file either localy or from REST endpoint
+            # TODO: requesting too much data puts an error in data.osm, check for this and inform the user
+            if self.dlg.local_file_radioButton.isChecked():
+                osm_file = self.dlg.local_file_lineEdit.text()
+            elif self.dlg.osm_download_radioButton.isChecked():
+                osm_bbox = [float(self.dlg.bounding_box_left_lineEdit.text()),
+                            float(self.dlg.bounding_box_bottom_lineEdit.text()),
+                            float(self.dlg.bounding_box_right_lineEdit.text()),
+                            float(self.dlg.bounding_box_top_lineEdit.text())]
+                osm_rest_endpoint = self.dlg.rest_endpoint_lineEdit.text()
+                osm_file = self.download_osm_data(osm_rest_endpoint, osm_bbox)
+
             # Get credentials if a pre-existing connection from QGIS was selected
             if self.dlg.existing_db_radioButton.isChecked():
                 db_name = self.dlg.db_listWidget.currentItem().text()
@@ -557,21 +610,12 @@ class osm2pgrouting4qgis:
                     "password": self.dlg.new_db_password_lineEdit.text(),
                     "save_username": "true" if self.dlg.new_db_save_username_checkBox.isChecked() else False,
                     "save_password": "true" if self.dlg.new_db_save_password_checkBox.isChecked() else False,
-                    "schema": self.dlg.schema_LineEdit if self.dlg.schema_checkBox.isChecked() else "public",
+                    "schema": self.dlg.schema_lineEdit if self.dlg.schema_checkBox.isChecked() else "public",
                 }
 
                 self.make_new_database(self.db_credentials["dbname"], self.db_credentials["host"],
                                        self.db_credentials["port"], self.db_credentials["user"],
                                        self.db_credentials["password"], self.db_credentials["schema"])
-
-            if self.dlg.local_file_radioButton.isChecked():
-                osm_bbox = [float(self.dlg.bounding_box_left_lineEdit.text()),
-                            float(self.dlg.bounding_box_bottom_lineEdit.text()),
-                            float(self.dlg.bounding_box_right_lineEdit.text()),
-                            float(self.dlg.bounding_box_top_lineEdit.text())]
-                osm_file = self.download_osm_data(osm_bbox)
-            elif self.dlg.osm_download_radioButton.ischecked():
-                osm_file = self.dlg.local_file_LineEdit.text()
 
             # Set map config
             if self.dlg.mapconfig_std_radioButton.isChecked():
@@ -581,11 +625,17 @@ class osm2pgrouting4qgis:
             elif self.dlg.mapconfig_bicycles_radioButton.isChecked():
                 map_config = os.path.join(os.getcwd(), r"map_configs/mapconfig_for_bicycles.xml")
 
-            # Set up other osm2pgrouting parameters
+            # Add the custom schema if it does not exist & the user specified it
             if self.dlg.schema_checkBox.isChecked():
                 schema = self.dlg.schema_lineEdit.text()
+                self.make_db_schema(self.db_credentials["dbname"], self.db_credentials["host"],
+                                       self.db_credentials["port"], self.db_credentials["user"],
+                                       self.db_credentials["password"], schema)
             else:
                 schema = "public"
+
+            # Add hstore extension in case the user specified --attributes or --tags
+
 
             # Set custom executable if applicable
             if self.dlg.alt_osm2pgr_exec_checkBox.isChecked() and self.dlg.alt_osm2pgr_exec_lineEdit.text() is not None:
@@ -609,7 +659,7 @@ class osm2pgrouting4qgis:
                 osm2pgrouting_parameters.append("--addnodes")
             if self.dlg.prefix_checkBox.isChecked():
                 osm2pgrouting_parameters.extend(["--prefix", self.dlg.prefix_lineEdit.text().lower()])
-            if self.dlg.prefix_checkBox.isChecked():
+            if self.dlg.suffix_checkBox.isChecked():
                 osm2pgrouting_parameters.extend(["--suffix", self.dlg.suffix_lineEdit.text().lower()])
 
             print("executing: {}".format(" ".join(osm2pgrouting_parameters)))
@@ -621,4 +671,6 @@ class osm2pgrouting4qgis:
                 else:
                     break
 
-            os.remove(osm_file)
+            # Remove the file only if it was downloaded
+            if self.dlg.osm_download_radioButton.isChecked():
+                os.remove(osm_file)
