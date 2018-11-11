@@ -482,7 +482,7 @@ class osm2pgrouting4qgis:
 
         return None
 
-    def make_new_database(self, dbname, host, port, user, password, schema="public"):
+    def make_new_database(self, dbname, host, port, user, password):
 
         # Log into maintenance database and create the new DB
         # TODO: parameterize maintenance DB (even though it will almost certainly be "postgres")
@@ -493,14 +493,6 @@ class osm2pgrouting4qgis:
             cur.execute(sql.SQL("CREATE DATABASE {};").format(sql.Identifier(dbname)))
             conn.commit()
             cur.close()
-
-        # if schema != "public":
-        #     conn_string = "dbname={0} host={1} port={2} user={3} password={4}".format(dbname, host, port, user, password)
-        #     with dbconnect(conn_string) as conn:
-        #         cur = conn.cursor()
-        #         cur.execute(sql.SQL("CREATE SCHEMA {};").format(sql.Identifier(schema)))
-        #         conn.commit()
-        #         cur.close()
 
         # Add the connection to QGIS
         settings = QSettings()
@@ -543,6 +535,17 @@ class osm2pgrouting4qgis:
 
         return None
 
+    def make_db_extensions(self, dbname, host, port, user, password):
+
+        conn_string = "dbname={0} host={1} port={2} user={3} password={4}".format(dbname, host, port, user, password)
+        with dbconnect(conn_string) as conn:
+            cur = conn.cursor()
+            cur.execute(sql.SQL("CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS pgrouting;"))
+            conn.commit()
+            cur.close()
+
+        return None
+
     def download_osm_data(self, rest_url, bbox):
 
         req = requests.get(r"{}?bbox={},{},{},{}"
@@ -571,6 +574,17 @@ class osm2pgrouting4qgis:
                 db_credentials["password"] = qs.value(k)
 
         return db_credentials
+
+    def add_hstore(self, dbname, host, port, user, password):
+
+        conn_string = "dbname={0} host={1} port={2} user={3} password={4}".format(dbname, host, port, user, password)
+        with dbconnect(conn_string) as conn:
+            cur = conn.cursor()
+            cur.execute(sql.SQL("CREATE EXTENSION IF NOT EXISTS hstore;"))
+            conn.commit()
+            cur.close()
+
+        return None
 
     def run(self):
         """Run method that performs all the real work"""
@@ -615,7 +629,7 @@ class osm2pgrouting4qgis:
 
                 self.make_new_database(self.db_credentials["dbname"], self.db_credentials["host"],
                                        self.db_credentials["port"], self.db_credentials["user"],
-                                       self.db_credentials["password"], self.db_credentials["schema"])
+                                       self.db_credentials["password"])
 
             # Set map config
             if self.dlg.mapconfig_std_radioButton.isChecked():
@@ -634,8 +648,16 @@ class osm2pgrouting4qgis:
             else:
                 schema = "public"
 
-            # Add hstore extension in case the user specified --attributes or --tags
+            # Add postgis & pgrouting extensions
+            self.make_db_extensions(self.db_credentials["dbname"], self.db_credentials["host"],
+                                       self.db_credentials["port"], self.db_credentials["user"],
+                                       self.db_credentials["password"])
 
+            # Add hstore extension in case the user specified --attributes or --tags
+            if self.dlg.add_attributes_checkBox.isChecked() or self.dlg.add_tags_checkBox.isChecked():
+                self.add_hstore(self.db_credentials["dbname"], self.db_credentials["host"],
+                                       self.db_credentials["port"], self.db_credentials["user"],
+                                       self.db_credentials["password"])
 
             # Set custom executable if applicable
             if self.dlg.alt_osm2pgr_exec_checkBox.isChecked() and self.dlg.alt_osm2pgr_exec_lineEdit.text() is not None:
@@ -661,6 +683,10 @@ class osm2pgrouting4qgis:
                 osm2pgrouting_parameters.extend(["--prefix", self.dlg.prefix_lineEdit.text().lower()])
             if self.dlg.suffix_checkBox.isChecked():
                 osm2pgrouting_parameters.extend(["--suffix", self.dlg.suffix_lineEdit.text().lower()])
+            if self.dlg.add_attributes_checkBox.isChecked():
+                osm2pgrouting_parameters.extend(["--attributes", self.dlg.suffix_lineEdit.text().lower()])
+            if self.dlg.add_tags_checkBox.isChecked():
+                osm2pgrouting_parameters.extend(["--tags", self.dlg.suffix_lineEdit.text().lower()])
 
             print("executing: {}".format(" ".join(osm2pgrouting_parameters)))
 
@@ -673,4 +699,5 @@ class osm2pgrouting4qgis:
 
             # Remove the file only if it was downloaded
             if self.dlg.osm_download_radioButton.isChecked():
-                os.remove(osm_file)
+                # os.remove(osm_file)
+                pass
