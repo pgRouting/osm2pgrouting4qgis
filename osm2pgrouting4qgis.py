@@ -22,7 +22,7 @@
  ***************************************************************************/
 """
 from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QIcon, QIntValidator
 from PyQt5.QtWidgets import QAction, QListWidgetItem, QFileDialog
 from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsPointXY, QgsMapSettings, QgsProject, \
     QgsDataSourceUri, QgsApplication
@@ -211,6 +211,10 @@ class osm2pgrouting4qgis:
         self._alt_osm2pgr_exec_toggle = False
         self.dlg.alt_osm2pgr_exec_checkBox.setChecked(False)
         self.dlg.alt_osm2pgr_exec_checkBox.clicked.connect(self.toggle_alt_osm2pgr_exec)
+
+        # Only integers allowed for chunk size
+        self.onlyInt = QIntValidator()
+        self.dlg.chunk_size_lineEdit.setValidator(self.onlyInt)
 
         # Set up file chooser
         self.dlg.local_file_pushButton.clicked.connect(self.open_file_chooser)
@@ -665,6 +669,7 @@ class osm2pgrouting4qgis:
             else:
                 osm2pgr_exec = "osm2pgrouting"
 
+            # Build command line statement
             osm2pgrouting_parameters = [
                 osm2pgr_exec,
                 "--file", osm_file,
@@ -674,11 +679,14 @@ class osm2pgrouting4qgis:
                 "--host", self.db_credentials["host"],
                 "--username", self.db_credentials["user"],
                 "--password", self.db_credentials["password"],
+                "--chunk", self.dlg.chunk_size_lineEdit.text()
             ]
             if self.dlg.overwrite_checkBox.isChecked():
                 osm2pgrouting_parameters.append("--clean")
             if self.dlg.nodes_checkBox.isChecked():
                 osm2pgrouting_parameters.append("--addnodes")
+            if self.dlg.no_index_checkBox.isChecked():
+                osm2pgrouting_parameters.append("--no-index")
             if self.dlg.prefix_checkBox.isChecked():
                 osm2pgrouting_parameters.extend(["--prefix", self.dlg.prefix_lineEdit.text().lower()])
             if self.dlg.suffix_checkBox.isChecked():
@@ -690,6 +698,7 @@ class osm2pgrouting4qgis:
 
             print("executing: {}".format(" ".join(osm2pgrouting_parameters)))
 
+            # Execute command line statement
             osm2pgrouting_process = subprocess.Popen(osm2pgrouting_parameters, stdout=subprocess.PIPE)
             for line in iter(osm2pgrouting_process.stdout.readline, ''):
                 if str(line) != "b''":
