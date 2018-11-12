@@ -2,7 +2,7 @@
 
 A front-end GUI for easy use of [osm2pgrouting](https://github.com/pgRouting/osm2pgrouting) from inside of
 [QGIS](https://qgis.org/en/site/). All of the parameters to control its behaviour are available in a simple & intuitive
-menu with no need for when you don't feel like mucking about in the command line, as well as a few extra features for
+menu for when you don't feel like mucking about in the command line, as well as a few extra features for
 streamlining the process of generating pgRouting-compatible networks directly from OSM with nothing more than a few
 clicks.
 
