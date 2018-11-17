@@ -222,6 +222,9 @@ class osm2pgrouting4qgis:
         # Make "Current Extent" button generate the current extent in their respective lineEdits
         self.dlg.extent_pushButton.clicked.connect(self.use_current_extent)
 
+        # Make REST endpoint test button test the endpoint
+        self.dlg.rest_endpoint_test_pushButton.clicked.connect(self.test_rest_endpoint)
+
         # Set up initial GUI state
         self.set_initial_state()
 
@@ -452,6 +455,20 @@ class osm2pgrouting4qgis:
         filename = QFileDialog.getOpenFileName(self.dlg, "Select .osm file", "", "*.osm")[0]
         if filename:
             self.dlg.local_file_lineEdit.setText(filename)
+
+        return None
+
+    def test_rest_endpoint(self):
+
+        rest_url = self.dlg.rest_endpoint_lineEdit.text()
+        req = requests.get(r"{}?bbox=0,0.0001,0,0.0001".format(rest_url))
+
+        if req.ok:
+            self.dlg.rest_endpoint_test_label.setStyleSheet("font: bold 14px; color: green;")
+        else:
+            self.dlg.rest_endpoint_test_label.setStyleSheet("font: bold 14px; color: red;")
+
+        self.dlg.rest_endpoint_test_label.setText("{}: {}".format(req.status_code, req.reason))
 
         return None
 
