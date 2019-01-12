@@ -232,7 +232,7 @@ class osm2pgrouting4qgis:
         self.dlg.rest_endpoint_test_pushButton.clicked.connect(self.test_rest_endpoint)
 
         # Set up initial GUI state
-        # self.set_initial_state()
+        self.set_initial_state()
 
         # TODO: move this to when the plugin executes
         # cd to the plugin home folder
@@ -424,14 +424,18 @@ class osm2pgrouting4qgis:
     def test_rest_endpoint(self):
 
         rest_url = self.dlg.rest_endpoint_lineEdit.text()
-        req = requests.get(r"{}?bbox=0,0.0001,0,0.0001".format(rest_url))
 
-        if req.ok:
-            self.dlg.rest_endpoint_test_label.setStyleSheet("font: bold 14px; color: green;")
-        else:
+        try:
+            req = requests.get(r"{}?bbox=0,0.0001,0,0.0001".format(rest_url))
+            if req.ok:
+                self.dlg.rest_endpoint_test_label.setStyleSheet("font: bold 14px; color: green;")
+            else:
+                self.dlg.rest_endpoint_test_label.setStyleSheet("font: bold 14px; color: red;")
+            self.dlg.rest_endpoint_test_label.setText("{}: {}".format(req.status_code, req.reason))
+
+        except requests.exceptions.MissingSchema:
+            self.dlg.rest_endpoint_test_label.setText("Invalid URL")
             self.dlg.rest_endpoint_test_label.setStyleSheet("font: bold 14px; color: red;")
-
-        self.dlg.rest_endpoint_test_label.setText("{}: {}".format(req.status_code, req.reason))
 
         return None
 
@@ -581,6 +585,7 @@ class osm2pgrouting4qgis:
 
         # Radio buttons
         self.dlg.local_file_radioButton.setChecked(True)
+        self.dlg.local_file_lineEdit.setText("")
         self.dlg.existing_db_radioButton.setChecked(True)
         self.dlg.mapconfig_std_radioButton.setChecked(True)
 
@@ -588,37 +593,57 @@ class osm2pgrouting4qgis:
         self.dlg.extent_pushButton.setDisabled(True)
         self.dlg.layers_comboBox.setDisabled(True)
         self.dlg.bounding_box_top_lineEdit.setDisabled(True)
+        self.dlg.bounding_box_top_lineEdit.setText("")
         self.dlg.bounding_box_left_lineEdit.setDisabled(True)
+        self.dlg.bounding_box_left_lineEdit.setText("")
         self.dlg.bounding_box_right_lineEdit.setDisabled(True)
+        self.dlg.bounding_box_right_lineEdit.setText("")
         self.dlg.bounding_box_bottom_lineEdit.setDisabled(True)
+        self.dlg.bounding_box_bottom_lineEdit.setText("")
         self.dlg.osm_download_label.setDisabled(True)
         self.dlg.rest_endpoint_lineEdit.setDisabled(True)
+        self.dlg.rest_endpoint_lineEdit.setText("https://api.openstreetmap.org/api/0.6/map")
         self.dlg.rest_endpoint_test_pushButton.setDisabled(True)
+        self.dlg.rest_endpoint_test_label.setText("")
+        self.dlg.rest_endpoint_test_label.setStyleSheet("color: black;")
 
         # Database
         self.dlg.overwrite_checkBox.setDisabled(False)
+        self.dlg.overwrite_checkBox.setChecked(False)
         self.dlg.db_listWidget.setDisabled(False)
         self.dlg.new_db_name_label.setDisabled(True)
         self.dlg.new_db_name_lineEdit.setDisabled(True)
+        self.dlg.new_db_name_lineEdit.setText("")
         self.dlg.new_db_service_label.setDisabled(True)
         self.dlg.new_db_service_lineEdit.setDisabled(True)
+        self.dlg.new_db_service_lineEdit.setText("")
         self.dlg.new_db_host_label.setDisabled(True)
         self.dlg.new_db_host_lineEdit.setDisabled(True)
+        self.dlg.new_db_host_lineEdit.setText("")
         self.dlg.new_db_port_label.setDisabled(True)
         self.dlg.new_db_port_lineEdit.setDisabled(True)
+        self.dlg.new_db_port_lineEdit.setText("")
         self.dlg.new_db_database_label.setDisabled(True)
         self.dlg.new_db_database_lineEdit.setDisabled(True)
+        self.dlg.new_db_database_lineEdit.setText("")
         self.dlg.new_db_username_label.setDisabled(True)
         self.dlg.new_db_username_lineEdit.setDisabled(True)
+        self.dlg.new_db_username_lineEdit.setText("")
         self.dlg.new_db_password_label.setDisabled(True)
         self.dlg.new_db_password_lineEdit.setDisabled(True)
+        self.dlg.new_db_password_lineEdit.setText("")
         self.dlg.new_db_save_username_checkBox.setDisabled(True)
+        self.dlg.new_db_save_username_checkBox.setChecked(False)
         self.dlg.new_db_save_password_checkBox.setDisabled(True)
+        self.dlg.new_db_save_password_checkBox.setChecked(False)
 
         # Schema
+        self.dlg.schema_checkBox.setChecked(False)
+        self.dlg.schema_lineEdit.setText("")
         self.dlg.schema_lineEdit.setDisabled(True)
 
         # Prefix
+        self.dlg.prefix_checkBox.setChecked(False)
         self.dlg.prefix_checkBox.setChecked(False)
         self.dlg.prefix_lineEdit.setDisabled(True)
 
@@ -627,13 +652,24 @@ class osm2pgrouting4qgis:
         self.dlg.suffix_lineEdit.setDisabled(True)
 
         # Add attributes / add nodes
+        self.dlg.nodes_checkBox.setChecked(False)
+        self.dlg.add_attributes_checkBox.setChecked(False)
         self.dlg.add_attributes_checkBox.setDisabled(True)
+        self.dlg.add_tags_checkBox.setChecked(False)
         self.dlg.add_tags_checkBox.setDisabled(True)
         self.dlg.addnodes_tree_decoration1.setDisabled(True)
         self.dlg.addnodes_tree_decoration2.setDisabled(True)
         self.dlg.addnodes_tree_decoration3.setDisabled(True)
 
+        # Indexes
+        self.dlg.no_index_checkBox.setChecked(False)
+
+        # Chunk
+        self.dlg.chunk_size_lineEdit.setText("20000")
+
         # Alternate osm2pgr exec
+        self.dlg.alt_osm2pgr_exec_checkBox.setChecked(False)
+        self.dlg.alt_osm2pgr_exec_lineEdit.setText("")
         self.dlg.alt_osm2pgr_exec_lineEdit.setDisabled(True)
 
         # Add existing layer extents to combobox
