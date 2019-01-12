@@ -22,10 +22,10 @@
  ***************************************************************************/
 """
 from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
-from PyQt5.QtGui import QIcon, QIntValidator
-from PyQt5.QtWidgets import QAction, QListWidgetItem, QFileDialog
+from PyQt5.QtGui import QIcon, QIntValidator, QDoubleValidator
+from PyQt5.QtWidgets import QAction, QListWidgetItem, QFileDialog, QDialog, QPushButton, QLabel
 from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsPointXY, QgsMapSettings, QgsProject, \
-    QgsDataSourceUri, QgsApplication
+    QgsDataSourceUri, QgsApplication, QgsMapLayerStore
 
 # Initialize Qt resources from file resources.py
 # from .resources import *
@@ -178,10 +178,11 @@ class osm2pgrouting4qgis:
             callback=self.run,
             parent=self.iface.mainWindow())
 
-        # Toggle between local file and OSM Download
+        # Toggle between local file, layer extent and other extent
         self.file_source_toggle = "file"
         self.dlg.local_file_radioButton.clicked.connect(self.select_local_osm)
-        self.dlg.osm_download_radioButton.clicked.connect(self.select_osm_download)
+        self.dlg.layers_radioButton.clicked.connect(self.select_layer_extent)
+        self.dlg.other_extent_radioButton.clicked.connect(self.select_other_extent)
 
         # Toggle between existing db and new db
         self.dlg.existing_db_radioButton.clicked.connect(self.select_existing_db)
@@ -212,8 +213,13 @@ class osm2pgrouting4qgis:
         self.dlg.alt_osm2pgr_exec_checkBox.setChecked(False)
         self.dlg.alt_osm2pgr_exec_checkBox.clicked.connect(self.toggle_alt_osm2pgr_exec)
 
-        # Only integers allowed for chunk size
+        # Only integers allowed for extents and chunk size
         self.onlyInt = QIntValidator()
+        self.onlyDouble = QDoubleValidator()
+        self.dlg.bounding_box_top_lineEdit.setValidator(self.onlyDouble)
+        self.dlg.bounding_box_bottom_lineEdit.setValidator(self.onlyDouble)
+        self.dlg.bounding_box_left_lineEdit.setValidator(self.onlyDouble)
+        self.dlg.bounding_box_right_lineEdit.setValidator(self.onlyDouble)
         self.dlg.chunk_size_lineEdit.setValidator(self.onlyInt)
 
         # Set up file chooser
@@ -226,78 +232,11 @@ class osm2pgrouting4qgis:
         self.dlg.rest_endpoint_test_pushButton.clicked.connect(self.test_rest_endpoint)
 
         # Set up initial GUI state
-        self.set_initial_state()
+        # self.set_initial_state()
 
+        # TODO: move this to when the plugin executes
         # cd to the plugin home folder
         os.chdir(os.path.join(QgsApplication.qgisSettingsDirPath(), r"python/plugins/osm2pgrouting4qgis"))
-
-
-    def set_initial_state(self):
-
-        # Radio buttons
-        self.dlg.local_file_radioButton.setChecked(True)
-        self.dlg.existing_db_radioButton.setChecked(True)
-        self.dlg.mapconfig_std_radioButton.setChecked(True)
-
-        # Source Data
-        self.dlg.extent_pushButton.setDisabled(True)
-        self.dlg.bounding_box_top_lineEdit.setDisabled(True)
-        self.dlg.bounding_box_left_lineEdit.setDisabled(True)
-        self.dlg.bounding_box_right_lineEdit.setDisabled(True)
-        self.dlg.bounding_box_bottom_lineEdit.setDisabled(True)
-        self.dlg.osm_download_label.setDisabled(True)
-        self.dlg.rest_endpoint_lineEdit.setDisabled(True)
-        self.dlg.rest_endpoint_test_pushButton.setDisabled(True)
-
-        # Database
-        self.dlg.overwrite_checkBox.setDisabled(False)
-        self.dlg.db_listWidget.setDisabled(False)
-        self.dlg.new_db_name_label.setDisabled(True)
-        self.dlg.new_db_name_lineEdit.setDisabled(True)
-        self.dlg.new_db_service_label.setDisabled(True)
-        self.dlg.new_db_service_lineEdit.setDisabled(True)
-        self.dlg.new_db_host_label.setDisabled(True)
-        self.dlg.new_db_host_lineEdit.setDisabled(True)
-        self.dlg.new_db_port_label.setDisabled(True)
-        self.dlg.new_db_port_lineEdit.setDisabled(True)
-        self.dlg.new_db_database_label.setDisabled(True)
-        self.dlg.new_db_database_lineEdit.setDisabled(True)
-        self.dlg.new_db_username_label.setDisabled(True)
-        self.dlg.new_db_username_lineEdit.setDisabled(True)
-        self.dlg.new_db_password_label.setDisabled(True)
-        self.dlg.new_db_password_lineEdit.setDisabled(True)
-        self.dlg.new_db_save_username_checkBox.setDisabled(True)
-        self.dlg.new_db_save_password_checkBox.setDisabled(True)
-
-        # Schema
-        self.dlg.schema_lineEdit.setDisabled(True)
-
-        # Prefix
-        self.dlg.prefix_checkBox.setChecked(False)
-        self.dlg.prefix_lineEdit.setDisabled(True)
-
-        # Suffix
-        self.dlg.suffix_checkBox.setChecked(False)
-        self.dlg.suffix_lineEdit.setDisabled(True)
-
-        # Add attributes / add nodes
-        self.dlg.add_attributes_checkBox.setDisabled(True)
-        self.dlg.add_tags_checkBox.setDisabled(True)
-        self.dlg.addnodes_tree_decoration1.setDisabled(True)
-        self.dlg.addnodes_tree_decoration2.setDisabled(True)
-        self.dlg.addnodes_tree_decoration3.setDisabled(True)
-
-        # Alternate osm2pgr exec
-        self.dlg.alt_osm2pgr_exec_lineEdit.setDisabled(True)
-
-        # Database connections
-        qs = QSettings()
-        k_list = [k for k in sorted(qs.allKeys()) if k[:10] == "PostgreSQL" and k[-8:] == "database"]
-        for k in k_list:
-            item = QListWidgetItem(k.split("/")[2])
-            self.dlg.db_listWidget.addItem(item)
-
-        return None
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
@@ -313,6 +252,9 @@ class osm2pgrouting4qgis:
 
         self.dlg.local_file_lineEdit.setDisabled(False)
         self.dlg.local_file_pushButton.setDisabled(False)
+
+        self.dlg.layers_comboBox.setDisabled(True)
+
         self.dlg.extent_pushButton.setDisabled(True)
         self.dlg.bounding_box_top_lineEdit.setDisabled(True)
         self.dlg.bounding_box_left_lineEdit.setDisabled(True)
@@ -324,10 +266,31 @@ class osm2pgrouting4qgis:
 
         return None
 
-    def select_osm_download(self):
+    def select_layer_extent(self):
 
         self.dlg.local_file_pushButton.setDisabled(True)
         self.dlg.local_file_lineEdit.setDisabled(True)
+
+        self.dlg.layers_comboBox.setDisabled(False)
+        
+        self.dlg.extent_pushButton.setDisabled(True)
+        self.dlg.bounding_box_top_lineEdit.setDisabled(True)
+        self.dlg.bounding_box_left_lineEdit.setDisabled(True)
+        self.dlg.bounding_box_right_lineEdit.setDisabled(True)
+        self.dlg.bounding_box_bottom_lineEdit.setDisabled(True)
+        self.dlg.osm_download_label.setDisabled(True)
+        self.dlg.rest_endpoint_lineEdit.setDisabled(True)
+        self.dlg.rest_endpoint_test_pushButton.setDisabled(True)
+
+        return None
+
+    def select_other_extent(self):
+
+        self.dlg.local_file_pushButton.setDisabled(True)
+        self.dlg.local_file_lineEdit.setDisabled(True)
+
+        self.dlg.layers_comboBox.setDisabled(True)
+        
         self.dlg.extent_pushButton.setDisabled(False)
         self.dlg.bounding_box_top_lineEdit.setDisabled(False)
         self.dlg.bounding_box_left_lineEdit.setDisabled(False)
@@ -472,7 +435,7 @@ class osm2pgrouting4qgis:
 
         return None
 
-    def use_current_extent(self):
+    def get_wgs84_bbox(self, extent):
 
         # Get current CRS and set up a CRS transformer for the current CRS and WGS84 (EPSG: 4326)
         canvas = self.iface.mapCanvas()
@@ -483,7 +446,6 @@ class osm2pgrouting4qgis:
         transformer = QgsCoordinateTransform(source_crs, target_crs, QgsProject.instance())
 
         # Get current extent and transform to WGS84
-        extent = self.iface.mapCanvas().extent()
         bottom_left_point = QgsPointXY(extent.xMinimum(), extent.yMinimum())
         top_right_point = QgsPointXY(extent.xMaximum(), extent.yMaximum())
         bottom_left_point_transformed = transformer.transform(bottom_left_point)
@@ -495,11 +457,17 @@ class osm2pgrouting4qgis:
         right = top_right_point_transformed.x()
         bottom = bottom_left_point_transformed.y()
 
+        return [left, bottom, right, top]
+
+    def use_current_extent(self):
+
+        extent = self.get_wgs84_bbox(self.iface.mapCanvas().extent())
+
         # Populate extent lineEdits
-        self.dlg.bounding_box_top_lineEdit.setText(str(top))
-        self.dlg.bounding_box_left_lineEdit.setText(str(left))
-        self.dlg.bounding_box_right_lineEdit.setText(str(right))
-        self.dlg.bounding_box_bottom_lineEdit.setText(str(bottom))
+        self.dlg.bounding_box_left_lineEdit.setText(str(extent[0]))
+        self.dlg.bounding_box_bottom_lineEdit.setText(str(extent[1]))
+        self.dlg.bounding_box_right_lineEdit.setText(str(extent[2]))
+        self.dlg.bounding_box_top_lineEdit.setText(str(extent[3]))
 
         return None
 
@@ -569,6 +537,8 @@ class osm2pgrouting4qgis:
 
     def download_osm_data(self, rest_url, bbox):
 
+        print(r"{}?bbox={},{},{},{}"
+                           .format(rest_url, bbox[0], bbox[1], bbox[2], bbox[3]))
         req = requests.get(r"{}?bbox={},{},{},{}"
                            .format(rest_url, bbox[0], bbox[1], bbox[2], bbox[3]))
         with open(os.path.join(os.getcwd(), r"osm/data.osm"), "w") as osm_file:
@@ -607,26 +577,113 @@ class osm2pgrouting4qgis:
 
         return None
 
+    def set_initial_state(self):
+
+        # Radio buttons
+        self.dlg.local_file_radioButton.setChecked(True)
+        self.dlg.existing_db_radioButton.setChecked(True)
+        self.dlg.mapconfig_std_radioButton.setChecked(True)
+
+        # Source Data
+        self.dlg.extent_pushButton.setDisabled(True)
+        self.dlg.layers_comboBox.setDisabled(True)
+        self.dlg.bounding_box_top_lineEdit.setDisabled(True)
+        self.dlg.bounding_box_left_lineEdit.setDisabled(True)
+        self.dlg.bounding_box_right_lineEdit.setDisabled(True)
+        self.dlg.bounding_box_bottom_lineEdit.setDisabled(True)
+        self.dlg.osm_download_label.setDisabled(True)
+        self.dlg.rest_endpoint_lineEdit.setDisabled(True)
+        self.dlg.rest_endpoint_test_pushButton.setDisabled(True)
+
+        # Database
+        self.dlg.overwrite_checkBox.setDisabled(False)
+        self.dlg.db_listWidget.setDisabled(False)
+        self.dlg.new_db_name_label.setDisabled(True)
+        self.dlg.new_db_name_lineEdit.setDisabled(True)
+        self.dlg.new_db_service_label.setDisabled(True)
+        self.dlg.new_db_service_lineEdit.setDisabled(True)
+        self.dlg.new_db_host_label.setDisabled(True)
+        self.dlg.new_db_host_lineEdit.setDisabled(True)
+        self.dlg.new_db_port_label.setDisabled(True)
+        self.dlg.new_db_port_lineEdit.setDisabled(True)
+        self.dlg.new_db_database_label.setDisabled(True)
+        self.dlg.new_db_database_lineEdit.setDisabled(True)
+        self.dlg.new_db_username_label.setDisabled(True)
+        self.dlg.new_db_username_lineEdit.setDisabled(True)
+        self.dlg.new_db_password_label.setDisabled(True)
+        self.dlg.new_db_password_lineEdit.setDisabled(True)
+        self.dlg.new_db_save_username_checkBox.setDisabled(True)
+        self.dlg.new_db_save_password_checkBox.setDisabled(True)
+
+        # Schema
+        self.dlg.schema_lineEdit.setDisabled(True)
+
+        # Prefix
+        self.dlg.prefix_checkBox.setChecked(False)
+        self.dlg.prefix_lineEdit.setDisabled(True)
+
+        # Suffix
+        self.dlg.suffix_checkBox.setChecked(False)
+        self.dlg.suffix_lineEdit.setDisabled(True)
+
+        # Add attributes / add nodes
+        self.dlg.add_attributes_checkBox.setDisabled(True)
+        self.dlg.add_tags_checkBox.setDisabled(True)
+        self.dlg.addnodes_tree_decoration1.setDisabled(True)
+        self.dlg.addnodes_tree_decoration2.setDisabled(True)
+        self.dlg.addnodes_tree_decoration3.setDisabled(True)
+
+        # Alternate osm2pgr exec
+        self.dlg.alt_osm2pgr_exec_lineEdit.setDisabled(True)
+
+        # Add existing layer extents to combobox
+        self.dlg.layers_comboBox.clear()
+        layers = QgsProject.instance().mapLayers()
+        for layer in layers:
+            print("{}: {}".format(layers[layer].name(), layer))
+            self.dlg.layers_comboBox.addItem(layers[layer].name(), layer)
+
+        # Database connections
+        self.dlg.db_listWidget.clear()
+        k_list = [k for k in sorted(QSettings().allKeys()) if k[:10] == "PostgreSQL" and k[-8:] == "database"]
+        for k in k_list:
+            item = QListWidgetItem(k.split("/")[2])
+            self.dlg.db_listWidget.addItem(item)
+
+        return None
+
     def run(self):
         """Run method that performs all the real work"""
         # show the dialog
         self.dlg.show()
+        self.set_initial_state()
         # Run the dialog event loop
         result = self.dlg.exec_()
         # See if OK was pressed
         if result:
 
-            # Get osm file either localy or from REST endpoint
+            # Get osm file either locally
             # TODO: requesting too much data puts an error in data.osm, check for this and inform the user
             if self.dlg.local_file_radioButton.isChecked():
                 osm_file = self.dlg.local_file_lineEdit.text()
-            elif self.dlg.osm_download_radioButton.isChecked():
-                osm_bbox = [float(self.dlg.bounding_box_left_lineEdit.text()),
-                            float(self.dlg.bounding_box_bottom_lineEdit.text()),
-                            float(self.dlg.bounding_box_right_lineEdit.text()),
-                            float(self.dlg.bounding_box_top_lineEdit.text())]
+
+            # Get osm file from selected layer extent
+            elif self.dlg.layers_radioButton.isChecked():
                 osm_rest_endpoint = self.dlg.rest_endpoint_lineEdit.text()
-                osm_file = self.download_osm_data(osm_rest_endpoint, osm_bbox)
+                target_layer = QgsProject.instance().mapLayer(
+                    self.dlg.layers_comboBox.itemData(self.dlg.layers_comboBox.currentIndex()))
+                bbox = self.get_wgs84_bbox(target_layer.extent())
+                print(bbox)
+                osm_file = self.download_osm_data(osm_rest_endpoint, bbox)
+
+            # Get osm file from other extent
+            elif self.dlg.other_extent_radioButton.isChecked():
+                osm_rest_endpoint = self.dlg.rest_endpoint_lineEdit.text()
+                osm_file = self.download_osm_data(osm_rest_endpoint,
+                                                  [float(self.dlg.bounding_box_left_lineEdit.text()),
+                                                   float(self.dlg.bounding_box_bottom_lineEdit.text()),
+                                                   float(self.dlg.bounding_box_right_lineEdit.text()),
+                                                   float(self.dlg.bounding_box_top_lineEdit.text())])
 
             # Get credentials if a pre-existing connection from QGIS was selected
             if self.dlg.existing_db_radioButton.isChecked():
@@ -724,6 +781,6 @@ class osm2pgrouting4qgis:
                     break
 
             # Remove the file only if it was downloaded
-            if self.dlg.osm_download_radioButton.isChecked():
+            if self.dlg.layers_radioButton.isChecked() or self.dlg.other_extent_radioButton.isChecked():
                 # os.remove(osm_file)
                 pass
