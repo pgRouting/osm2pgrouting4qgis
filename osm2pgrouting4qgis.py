@@ -279,8 +279,8 @@ class osm2pgrouting4qgis:
         self.dlg.bounding_box_right_lineEdit.setDisabled(True)
         self.dlg.bounding_box_bottom_lineEdit.setDisabled(True)
         self.dlg.osm_download_label.setDisabled(True)
-        self.dlg.rest_endpoint_lineEdit.setDisabled(True)
-        self.dlg.rest_endpoint_test_pushButton.setDisabled(True)
+        self.dlg.rest_endpoint_lineEdit.setDisabled(False)
+        self.dlg.rest_endpoint_test_pushButton.setDisabled(False)
 
         return None
 
@@ -782,5 +782,5 @@ class osm2pgrouting4qgis:
 
             # Remove the file only if it was downloaded
             if self.dlg.layers_radioButton.isChecked() or self.dlg.other_extent_radioButton.isChecked():
-                # os.remove(osm_file)
+                os.remove(osm_file)
                 pass
